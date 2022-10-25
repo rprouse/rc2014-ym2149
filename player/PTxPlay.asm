@@ -1,4 +1,7 @@
+; docker run --rm -v ${PWD}:/src -w /src -it rprouse/asm-dev
 ; sjasmplus PTxPlay.asm --color=on --lst=PTxPlay.lst --raw=play.com
+; Updated from https://github.com/MMaciocia/RC2014-YM2149
+
 ;Universal PT2 and PT3 player for ZX Spectrum and MSX
 ;(c)2004-2007 S.V.Bulba <vorobey@mail.khstu.ru>
 ;http://bulba.untergrund.net (http://bulba.at.kz)
@@ -16,7 +19,7 @@ CurPosCounter=0
 ;3) Allow channels allocation bits at (START+10)
 ACBBAC=0
 ;4) Allow loop checking and disabling
-LoopChecker=0
+LoopChecker=1
 ;5) Insert official identificator
 Id=1
 
@@ -47,18 +50,89 @@ Id=1
 
 ;Call MUTE or INIT one more time to mute sound after stopping
 ;playing
+boot	equ	#0000
+bdos	equ	#0005
+fcb1	equ	#005c
+sfcb	equ	fcb1
+sfcbcr	equ	sfcb+#20	;should point to CURRENT RECORD byte in SFCB
+dbuff	equ	#0080
+printf	equ	9
+openf	equ	15
+closef	equ	16
+readf	equ	20
+todma	equ	#80			;this is the size of the read to DMA buffer
+;stack	equ	MDLADDR+#5000
 
-	;ORG #C000
+
 	ORG #100
+	ld	(oldstack),sp
+	ld	sp,stack
+	ld	de,sfcb		;name of file and drive are stored here
+	call	open
+	ld	de,nofile	;just in case of error
+	inc	a
+	jr	z,badfile	;no file found if zero
+	ld	a,0			;have to do this every file open
+	ld	(sfcbcr),a		;set current record to 0 as CP/M does not
+	ld	de,MDLADDR		;it is there but got corrupted for some reason
+	ld	(next_dest),de	;we now have where the file is copied too and where it is expected.
+
+r_loop
+	ld	de,sfcb		;fcb needed prior to the call
+	call	read
+	or	a			;this will set zero flag unless it is eofile.....
+	jr	nz,eofile
+
+	ld	hl,dbuff		;ok we need to copy from DMA to where PTX-player expects it to be
+	ld	de,(next_dest)	;sets the de to current end of address
+	ld	bc,todma		;CP/M only gives us 128 bytes at a time
+	ldir				;ldir does the xfer for us
+	ld	(next_dest),de	;DE is now 128 bytes higher, and, we can use to show where we got to
+	jr	r_loop
+
+eofile	ld	de,sfcb
+		call	close
+
+finis	ld	de,success	;message at this location
+		ld	c,printf	;print it
+		call	bdos
+		ld	sp,(oldstack)	;put stack back to how we found it
+		jp	begin			;and start PTX-player
+
+badfile	ld	de,nofile
+		ld	c,printf
+		call	bdos
+		ld	sp,(oldstack)	;put stack back to how we found it
+		ld	c,#0			;this is the CP/M proper exit call
+		jp	bdos
+
+open	ld	c,openf
+		jp	bdos
+
+close	ld	c,closef
+		jp	bdos
+
+read	ld	c,readf
+		jp	bdos
+
+nofile	db 	"No file of that name",13,10,#24
+success	db	"File read to memory, playing...",13,10,#24
+next_dest	DW	MDLADDR
+oldstack	dw	#0000
+			db	0,0,0,0,0,0,0,0,0,0,0,0,0,0	;some of this gets overwritten for some strange reason.
+
+stack 	ds	#80
+
+; END OF MM additions
 	; ld hl, startupstr
   ; call print
 ;Test codes (commented)
-	;LD A,2 ;PT2,ABC,Looped
+begin	;LD A,2 ;PT2,ABC,Looped
 	LD A, 0
 	LD (START+10),A
 	CALL START
-	; ld hl, startupstr
-	; call print
+	ld hl, startupstr
+	call print
 ;	EI
 ;_LP	HALT
 _LP	CALL START+5
@@ -1539,13 +1613,26 @@ VAR0END	EQU VT_+16 ;INIT zeroes from VARS to VAR0END-1
 VARSEND EQU $
 
 
-TX push af
-txbusy     in a,($80)          ; read serial status
-            bit 1,a             ; check status bit 1
-            jr z, txbusy        ; loop if zero (serial is busy)
-            pop af
-            out ($81), a        ; transmit the character
-            ret
+TX 		push hl				; MM calls to CP/M kill HL and we need it
+		push af
+;txbusy  in a,($80)          ; read serial status
+;        bit 1,a             ; check status bit 1
+;       jr z, txbusy        ; loop if zero (serial is busy)
+;        pop af
+;        out ($81), a        ; transmit the character
+;        ret
+; MM added print routine for output via CP/M BDOS.
+		push	bc			; MM just in case the caller needs them intact
+		push	de			; MM going to use C and E for CP/M call.
+		ld	c,2			; MM call BDOS with console out
+		ld	e,a 		; MM e must contain character
+		call	bdos	; MM go do it
+		pop	de
+		pop	bc
+		pop	af
+		pop	hl
+		ret
+
 print
             ld a, (hl)
             or a
@@ -1554,16 +1641,16 @@ print
             inc hl
             jp print
 
-startupstr            DB "PTx Player.",10,13,0
+startupstr DB "RC2014 ProTracker 2022.",10,13,0
 loopstr DB "*",10,13,0
 endstr DB "the end.",10,13,0
 
-pause
+pause						; MM put in a test for character at terminal - RAW I/O called
   push bc
   push de
   push af
 
-  LD BC, $1500            ;Loads BC with hex 1000
+  LD BC, $1500            ;Loads BC with hex 1500
   ; outer: LD DE, $1000            ;Loads DE with hex 1000
   ; inner: DEC DE                  ;Decrements DE
   ; LD A, D                 ;Copies D into A
@@ -1574,16 +1661,46 @@ outer DEC BC                  ;Decrements BC
   OR C                    ;Bitwise OR of C with A (now, A = B | C)
   JP NZ, outer            ;Jumps back to Outer: label if A is not zero
 
-  pop af
-  pop de
-  pop bc
+
+	ld	c,6				; MM going to check for a console input
+	ld	e,#ff			; MM tell CP/M we want a character
+	call	bdos
+	cp	a,0				; MM 'a' will be zero if nothing there.
+	jr	nz,quit			; MM quit if there is a character
+
+	pop af
+	pop de
+	pop bc
+
   RET                     ;Return from call to this subroutine
 
+ymreg	equ	#d8				; MM entry to YM register array
+ymdat	equ	#d0				; MM and data port for when we need to write to selected register.
+
+quit						; MM a key was pressed, don't care which, just exit.
+							; MM set volume of YM2149 to off before exiting
+		ld	a,8				; MM the channel a volume register
+		out	(ymreg),a 		; MM select
+		ld	a,0				; MM and volume zero, repeat for channel B and C.
+		out (ymdat),a
+		ld	a,9				; MM channel B volume register
+		out (ymreg),a
+		ld	a,0
+		out	(ymdat),a
+		ld 	a,#0A 			; MM as per data sheet descript. Ch C volume register is 0A not 10.
+		out	(ymreg),a
+		ld	a,0
+		out (ymdat),a 		; MM should be all quiet now
+
+		ld	c,0			  	; MM quit to CP/M command prompt
+		jp	bdos
+
 MDLADDR EQU $
+	; MM dont need any includes as we read via CP/M now.
 	;incbin tunes/through_yeovil.pt3
 	;incbin tunes/nq_-_synchronization_(2015).pt3
 	;incbin tunes/nq_-_louboutin_(2016).pt3
-	incbin tunes/MmcM_-_Recollection_(2015).pt3
+	;incbin tunes/MmcM_-_Recollection_(2015).pt3
 	;incbin tunes/luchibobra_-_three_bad_mice.pt3
 	;incbin tunes/MmcM_-_Agressive_Attack.pt3
 ;Release 0 steps:
