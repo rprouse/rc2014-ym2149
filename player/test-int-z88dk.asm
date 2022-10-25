@@ -1,5 +1,5 @@
-;build with z80asm -b test-z88dk.asm
-org 0x0100
+;build with sjasmplus test-int-z88dk.asm --color=on --lst=test-int-z88dk.lst --raw=test-int-z88dk.com
+  org 0x0100
 CNTRL EQU $A5
 COUNT EQU $C0
 PORT0 EQU $40

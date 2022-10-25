@@ -1,9 +1,10 @@
-;build with z80asm -b test-z88dk.asm
-org 0x0100
+;build with sjasmplus test-z88dk.asm --color=on --lst=test-z88dk.lst --raw=test-z88dk.com
+register_port equ 0xd8
+data_port equ 0xd0
+
+  org $100
 
 setup:
-  defc register_port = 0xd8
-  defc data_port = 0xd0
   ld a, 7
   out (register_port), a ;select the mixer register
   ld a, 62

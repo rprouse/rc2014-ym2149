@@ -1,3 +1,4 @@
+; sjasmplus PTxPlay.asm --color=on --lst=PTxPlay.lst --raw=play.com
 ;Universal PT2 and PT3 player for ZX Spectrum and MSX
 ;(c)2004-2007 S.V.Bulba <vorobey@mail.khstu.ru>
 ;http://bulba.untergrund.net (http://bulba.at.kz)
@@ -47,8 +48,8 @@ Id=1
 ;Call MUTE or INIT one more time to mute sound after stopping
 ;playing
 
-	ORG #C000
-	;ORG #100
+	;ORG #C000
+	ORG #100
 	; ld hl, startupstr
   ; call print
 ;Test codes (commented)
