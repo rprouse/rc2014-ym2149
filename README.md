@@ -79,6 +79,9 @@ The board contains a set of jumpers to select the address at which the sound chi
 
 "Normal" or MSX addressing mode is recommended.
 
+The "default" addresses for this board are register write 0xA0, data write 0xA1, data read 0xA2
+These correspond to the RomWBW `AYMODE == AYMODE_MSX` setting. See [here](https://github.com/wwarthen/RomWBW/blob/master/Source/HBIOS/ay38910.asm#L73).
+
 ### Normal/MSX/ColecoVision addressing
 MSX mode uses standard 8-bit port addressing. This board allows the base address to be any value from 00-F0 (MSX uses A0 and ColecoVision SGM uses 50 for the PSG's base address). Different ports in the lower nybble are used for reading and writing the address and data registers.  Writing to port `X0h` selects the PSG register. Writing to port `X1h` writes the selected PSG register value and reading port `X2h` reads the selected PSG register value.
 
@@ -99,7 +102,7 @@ ZX Spectrum mode uses an uncommon 16-bit I/O addressing scheme for the PSG. This
 
 
 ### Compatibility with Rev 5
-REV6 no longer supports the `D0/D8` addresses used by default in REV5 and earlier.  REV6 introduced MSX-compatible addressing and supporting addresses used by REV5 and earlier would have required additional chips. This seems like a fair tradeoff since existing software that uses the original default addresses for this board is minimal compared to software that uses the MSX or Spectrum addressing schemes.
+REV6 no longer supports the `D0/D8` addresses used by default in REV5 and earlier (`AYMODE_RC2014` in [RomWBW](https://github.com/wwarthen/RomWBW/blob/master/Source/HBIOS/ay38910.asm#L66)).  REV6 introduced MSX-compatible addressing and supporting addresses used by REV5 and earlier would have required additional chips. This seems like a fair tradeoff since existing software that uses the original default addresses for this board is minimal compared to software that uses the MSX or Spectrum addressing schemes.
 
 Note: Pin 1 on each jumper is identified by having square pad.
 
